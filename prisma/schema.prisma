@@ -1,0 +1,123 @@
+// Prisma schema - Jahapy backend
+//
+// DB: PostgreSQL. DATABASE_URL apunta al Postgres (Render en produccion).
+// En deploy el schema se sincroniza con `prisma db push` (sin archivos de
+// migracion por proveedor). Ver README ("Desplegar en Render").
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NOTA: `role` se guarda como String y se valida en la app (ver authController:
+// VALID_ROLES). Valores: PASSENGER | DRIVER | COURIER | ADMIN.
+// En Postgres se podria convertir a un enum nativo, pero no es necesario.
+
+model User {
+  id           String   @id @default(cuid())
+  fullName     String
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String
+  role         String   @default("PASSENGER")
+  city         String?
+  rating       Float?   @default(5.0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones con viajes
+  ridesAsPassenger Ride[] @relation("PassengerRides")
+  ridesAsDriver    Ride[] @relation("DriverRides")
+
+  // Relaciones con pedidos de comida (delivery)
+  ordersAsCustomer FoodOrder[] @relation("CustomerOrders")
+  ordersAsCourier  FoodOrder[] @relation("CourierOrders")
+}
+
+// Ride: un viaje de transporte solicitado por un pasajero y tomado por un conductor.
+// NOTA: `status` y `rideType` son String validados en la app
+// (ver src/services/rideService.js: RIDE_STATUSES / transiciones).
+//   status: REQUESTED | ACCEPTED | ARRIVING | ARRIVED | IN_PROGRESS | COMPLETED | CANCELLED
+//   rideType: standard | moto | xl | ...
+model Ride {
+  id          String   @id @default(cuid())
+  passengerId String
+  driverId    String?
+  status      String   @default("REQUESTED")
+  rideType    String   @default("standard")
+
+  originLat   Float
+  originLng   Float
+  originLabel String?
+  destLat     Float
+  destLng     Float
+  destLabel   String?
+
+  distanceKm  Float?
+  durationMin Float?
+  fare        Int? // en guaranies
+
+  cancelReason String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  acceptedAt  DateTime?
+  completedAt DateTime?
+
+  passenger User  @relation("PassengerRides", fields: [passengerId], references: [id])
+  driver    User? @relation("DriverRides", fields: [driverId], references: [id])
+
+  @@index([passengerId])
+  @@index([driverId])
+  @@index([status])
+}
+
+// FoodOrder: un pedido de delivery hecho por un CLIENTE a un COMERCIO y
+// entregado por un REPARTIDOR. Espejo del patron de Ride para tiempo real.
+// NOTA: `status` es String validado en la app
+// (ver src/services/foodOrderService.js: ORDER_STATUSES / transiciones).
+//   status: PLACED | CONFIRMED | PREPARING | READY | PICKED_UP | DELIVERING | DELIVERED | CANCELLED
+//   items: String JSON -> [{ name, qty, price }]
+//   businessId: por ahora un String libre (id del comercio). Sin tabla Business todavia.
+model FoodOrder {
+  id          String   @id @default(cuid())
+  customerId  String
+  businessId  String
+  courierId   String?
+  status      String   @default("PLACED")
+
+  items       String // JSON: [{ name, qty, price }]
+  subtotal    Int // en guaranies
+  deliveryFee Int
+  total       Int
+  address     String
+  notes       String?
+  cancelReason String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  confirmedAt DateTime?
+  readyAt     DateTime?
+  deliveredAt DateTime?
+
+  customer User  @relation("CustomerOrders", fields: [customerId], references: [id])
+  courier  User? @relation("CourierOrders", fields: [courierId], references: [id])
+
+  @@index([customerId])
+  @@index([courierId])
+  @@index([businessId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// PROXIMAS FASES (no implementar todavia):
+//   - DriverProfile: documentos, estado de verificacion, licencia.
+//   - Vehicle: vehiculos asociados a un conductor.
+//   - Business: tabla de comercios (hoy businessId es un String libre en FoodOrder).
+//   - Wallet / Transaction: saldo y movimientos.
+// Se agregaran como nuevos modelos + relaciones en migraciones posteriores.
+// ---------------------------------------------------------------------------

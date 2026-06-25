@@ -1,0 +1,28 @@
+# Render Blueprint - Jahapy backend (Node + Express + Prisma + Socket.IO)
+# Deploy: el build sincroniza el schema con Postgres via `prisma db push`
+# (no se usan archivos de migracion). Ver README ("Desplegar en Render").
+
+databases:
+  - name: jahapy-db
+    databaseName: jahapy
+    plan: free
+
+services:
+  - type: web
+    name: jahapy-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jahapy-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        value: http://localhost:5173,http://localhost:4173,https://jocular-cat-10b938.netlify.app
