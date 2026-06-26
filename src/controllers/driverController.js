@@ -51,6 +51,23 @@ async function me(req, res, next) {
   }
 }
 
+// POST /api/driver/demo-approve  (DEMO)
+// Aprueba el DriverProfile DEL PROPIO usuario logueado (status -> 'approved').
+// Es un atajo de demo; en produccion la aprobacion la hace un admin.
+async function demoApprove(req, res, next) {
+  try {
+    const profile = await driverProfileService.demoApprove(req.user.sub);
+    if (!profile) {
+      return res.status(404).json({
+        error: 'No tenes un perfil de conductor. Postula primero con /api/driver/apply',
+      });
+    }
+    return res.json({ profile });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 // POST /api/driver/pay-commission  (pago simulado: resetea commissionDue a 0)
 async function payCommission(req, res, next) {
   try {
@@ -64,4 +81,4 @@ async function payCommission(req, res, next) {
   }
 }
 
-module.exports = { apply, me, payCommission };
+module.exports = { apply, me, demoApprove, payCommission };

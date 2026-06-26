@@ -39,4 +39,20 @@ async function me(req, res, next) {
   }
 }
 
-module.exports = { apply, me };
+// POST /api/business/demo-approve  (DEMO)
+// Aprueba el comercio del propio usuario logueado. En produccion lo hace un admin.
+async function demoApprove(req, res, next) {
+  try {
+    const profile = await businessProfileService.demoApprove(req.user.sub);
+    if (!profile) {
+      return res.status(404).json({
+        error: 'No tenes un comercio. Postula primero con /api/business/apply',
+      });
+    }
+    return res.json({ profile });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { apply, me, demoApprove };

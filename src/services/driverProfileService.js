@@ -38,6 +38,18 @@ async function getByUserId(userId) {
   return prisma.driverProfile.findUnique({ where: { userId } });
 }
 
+// DEMO: aprueba el perfil del propio usuario (status -> 'approved').
+// En produccion esto lo hace un admin via setStatus; este atajo existe para
+// que el flujo de la demo funcione sin un admin real.
+async function demoApprove(userId) {
+  const profile = await prisma.driverProfile.findUnique({ where: { userId } });
+  if (!profile) return null;
+  return prisma.driverProfile.update({
+    where: { userId },
+    data: { status: 'approved' },
+  });
+}
+
 async function payCommission(userId) {
   const profile = await prisma.driverProfile.findUnique({ where: { userId } });
   if (!profile) return null;
@@ -85,6 +97,7 @@ module.exports = {
   calcCommission,
   applyDriver,
   getByUserId,
+  demoApprove,
   payCommission,
   addCommission,
   listByStatus,

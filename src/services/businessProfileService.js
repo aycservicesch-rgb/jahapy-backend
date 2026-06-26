@@ -39,6 +39,17 @@ async function getById(id) {
   return prisma.businessProfile.findUnique({ where: { id } });
 }
 
+// DEMO: aprueba el comercio principal del propio usuario (status -> 'approved').
+// En produccion lo hace un admin via setStatus.
+async function demoApprove(ownerId) {
+  const existing = await prisma.businessProfile.findFirst({ where: { ownerId } });
+  if (!existing) return null;
+  return prisma.businessProfile.update({
+    where: { id: existing.id },
+    data: { status: 'approved' },
+  });
+}
+
 // Admin: lista de comercios por estado (default pending).
 async function listByStatus(status) {
   const where = status ? { status } : {};
@@ -67,6 +78,7 @@ module.exports = {
   applyBusiness,
   getByOwnerId,
   getById,
+  demoApprove,
   listByStatus,
   setStatus,
 };
