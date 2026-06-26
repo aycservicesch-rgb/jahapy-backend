@@ -75,14 +75,24 @@ La aprobacion vive en la **BD** (no solo en el dispositivo) y se exige del lado 
 | POST   | `/api/business/apply`         | Si    | Crea/actualiza el `BusinessProfile` (status `pending`). Body: `{ name, category?, address?, phone?, menu? }` |
 | GET    | `/api/business/me`            | Si    | El `BusinessProfile` del usuario (o `null`)            |
 
-### Admin (requiere rol `ADMIN`)
+### Admin (requiere ser administrador)
+
+Un usuario es administrador si su `role === 'ADMIN'` **o** si su email esta en la
+allowlist `ADMIN_EMAILS` (variable de entorno, lista separada por comas,
+case-insensitive). Esto permite designar al dueno como admin sin crear un usuario
+con rol `ADMIN`. Configurar `ADMIN_EMAILS` en las env del servicio (Render).
+
+Las listas devuelven, por cada solicitud, los datos del solicitante
+(`user` / `owner`: `id, fullName, email, phone, city`) junto con los campos del
+perfil (vehiculo o comercio), su `status` y el id usable para aprobar/rechazar
+(`userId` para conductores, `id` para comercios).
 
 | Metodo | Ruta                                      | Descripcion                                |
 |--------|-------------------------------------------|--------------------------------------------|
-| GET    | `/api/admin/drivers?status=pending`       | Lista perfiles de conductor por estado     |
+| GET    | `/api/admin/drivers?status=pending`       | Lista perfiles de conductor por estado (incluye `user`) |
 | POST   | `/api/admin/drivers/:userId/approve`      | Aprueba un conductor (devuelve el perfil)  |
 | POST   | `/api/admin/drivers/:userId/reject`       | Rechaza un conductor                        |
-| GET    | `/api/admin/businesses?status=pending`    | Lista comercios por estado                 |
+| GET    | `/api/admin/businesses?status=pending`    | Lista comercios por estado (incluye `owner`) |
 | POST   | `/api/admin/businesses/:id/approve`       | Aprueba un comercio (devuelve el perfil)   |
 | POST   | `/api/admin/businesses/:id/reject`        | Rechaza un comercio                         |
 

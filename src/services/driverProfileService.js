@@ -74,7 +74,7 @@ async function listByStatus(status) {
   return prisma.driverProfile.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    include: { user: { select: { id: true, fullName: true, email: true, phone: true } } },
+    include: { user: { select: { id: true, fullName: true, email: true, phone: true, city: true } } },
   });
 }
 
@@ -86,7 +86,7 @@ async function setStatus(userId, status) {
   const updated = await prisma.driverProfile.update({
     where: { userId },
     data: { status },
-    include: { user: { select: { id: true, fullName: true, email: true, phone: true } } },
+    include: { user: { select: { id: true, fullName: true, email: true, phone: true, city: true } } },
   });
   return { profile: updated };
 }

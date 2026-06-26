@@ -56,7 +56,7 @@ async function listByStatus(status) {
   return prisma.businessProfile.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    include: { owner: { select: { id: true, fullName: true, email: true, phone: true } } },
+    include: { owner: { select: { id: true, fullName: true, email: true, phone: true, city: true } } },
   });
 }
 
@@ -68,7 +68,7 @@ async function setStatus(id, status) {
   const updated = await prisma.businessProfile.update({
     where: { id },
     data: { status },
-    include: { owner: { select: { id: true, fullName: true, email: true, phone: true } } },
+    include: { owner: { select: { id: true, fullName: true, email: true, phone: true, city: true } } },
   });
   return { profile: updated };
 }
