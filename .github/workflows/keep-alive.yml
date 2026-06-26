@@ -1,0 +1,23 @@
+name: keep-alive
+
+# Mantiene despierto el backend en Render (plan free duerme tras 15 min de inactividad).
+# Hace ping a /health cada ~10 minutos para evitar el "cold start" en producción.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://jahapy-backend.onrender.com/health || echo "000")
+            echo "intento $i -> HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 20
+          done
+          echo "backend no respondió 200 (puede estar despertando); no falla el job"
