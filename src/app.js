@@ -2,19 +2,35 @@
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const rideRoutes = require('./routes/rides');
 const orderRoutes = require('./routes/orders');
+const driverRoutes = require('./routes/driver');
+const businessRoutes = require('./routes/business');
+const adminRoutes = require('./routes/admin');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { generalLimiter, authLimiter } = require('./middleware/rateLimit');
 const { getAllowedOrigins } = require('./lib/corsOrigins');
 
 const app = express();
 
-// CORS configurable por env (CORS_ORIGIN, lista separada por comas).
+// Detras del proxy de Render: necesario para que express-rate-limit lea la IP real.
+app.set('trust proxy', 1);
+
+// Headers de seguridad (CSP, HSTS, etc.).
+app.use(helmet());
+
+// CORS configurable por env (CORS_ORIGIN, lista separada por comas). NO usa '*'.
 app.use(cors({ origin: getAllowedOrigins(), credentials: true }));
-app.use(express.json());
+
+// Limite de tamano del body para evitar payloads abusivos.
+app.use(express.json({ limit: '1mb' }));
+
+// Rate limiting general para toda la API.
+app.use(generalLimiter);
 
 // Chequeo de salud
 app.get('/health', (req, res) => {
@@ -22,9 +38,13 @@ app.get('/health', (req, res) => {
 });
 
 // Rutas de la API
-app.use('/api/auth', authRoutes);
+// /api/auth con un limiter MAS estricto (anti fuerza bruta).
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/driver', driverRoutes);
+app.use('/api/business', businessRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api', userRoutes);
 
 // 404 + manejo de errores

@@ -36,6 +36,57 @@ model User {
   // Relaciones con pedidos de comida (delivery)
   ordersAsCustomer FoodOrder[] @relation("CustomerOrders")
   ordersAsCourier  FoodOrder[] @relation("CourierOrders")
+
+  // Perfiles de verificacion (conductor / comercio)
+  driverProfile   DriverProfile?
+  businessProfiles BusinessProfile[] @relation("BusinessOwner")
+}
+
+// DriverProfile: datos del vehiculo + estado de verificacion del conductor.
+// La aprobacion vive en la BD (no solo en el dispositivo) y se exige del lado
+// servidor: el socket `driver:online` y `ride:accept` la consultan.
+//   status: pending | approved | rejected (validado en la app: PROFILE_STATUSES)
+//   docs: String JSON con flags de documentos cargados, ej {"license":true,"id":true}
+//   commissionDue: comision adeudada (en guaranies) por viajes en efectivo.
+model DriverProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  status        String   @default("pending")
+  vehicleType   String?
+  brand         String?
+  model         String?
+  year          Int?
+  plate         String?
+  docs          String?  // JSON: { license, id, insurance, ... }
+  commissionDue Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([status])
+}
+
+// BusinessProfile: comercio (restaurante) con estado de verificacion.
+// `business:online` exige status === 'approved' del lado servidor.
+//   status: pending | approved | rejected
+//   menu: String JSON opcional (para otra fase).
+model BusinessProfile {
+  id        String   @id @default(cuid())
+  ownerId   String
+  name      String
+  category  String?
+  status    String   @default("pending")
+  address   String?
+  phone     String?
+  menu      String?  // JSON opcional (fase posterior)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner User @relation("BusinessOwner", fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([status])
 }
 
 // Ride: un viaje de transporte solicitado por un pasajero y tomado por un conductor.
@@ -60,6 +111,9 @@ model Ride {
   distanceKm  Float?
   durationMin Float?
   fare        Int? // en guaranies
+
+  // Metodo de pago: "cash" | "card" | ... Solo "cash" genera comision al conductor.
+  paymentMethod String @default("cash")
 
   cancelReason String?
 
@@ -115,9 +169,7 @@ model FoodOrder {
 
 // ---------------------------------------------------------------------------
 // PROXIMAS FASES (no implementar todavia):
-//   - DriverProfile: documentos, estado de verificacion, licencia.
-//   - Vehicle: vehiculos asociados a un conductor.
-//   - Business: tabla de comercios (hoy businessId es un String libre en FoodOrder).
-//   - Wallet / Transaction: saldo y movimientos.
-// Se agregaran como nuevos modelos + relaciones en migraciones posteriores.
+//   - Vehicle: varios vehiculos por conductor (hoy se guarda 1 en DriverProfile).
+//   - Wallet / Transaction: saldo y movimientos; pago real de comision.
+//   - Relacionar FoodOrder.businessId con BusinessProfile.id (hoy es String libre).
 // ---------------------------------------------------------------------------

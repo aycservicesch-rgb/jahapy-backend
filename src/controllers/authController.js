@@ -16,17 +16,30 @@ async function register(req, res, next) {
     if (!fullName || !email || !password) {
       return res.status(400).json({ error: 'fullName, email y password son obligatorios' });
     }
-    if (!EMAIL_RE.test(email)) {
+    if (typeof fullName !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: 'fullName, email y password deben ser texto' });
+    }
+    const cleanName = fullName.trim();
+    if (cleanName.length < 2 || cleanName.length > 120) {
+      return res.status(400).json({ error: 'El nombre debe tener entre 2 y 120 caracteres' });
+    }
+    if (email.length > 254 || !EMAIL_RE.test(email)) {
       return res.status(400).json({ error: 'El email no es valido' });
     }
-    if (String(password).length < 6) {
-      return res.status(400).json({ error: 'La contrasena debe tener al menos 6 caracteres' });
+    if (password.length < 6 || password.length > 128) {
+      return res.status(400).json({ error: 'La contrasena debe tener entre 6 y 128 caracteres' });
+    }
+    if (phone != null && (typeof phone !== 'string' || phone.length > 30)) {
+      return res.status(400).json({ error: 'El telefono no es valido' });
+    }
+    if (city != null && (typeof city !== 'string' || city.length > 120)) {
+      return res.status(400).json({ error: 'La ciudad no es valida' });
     }
     if (role && !VALID_ROLES.includes(role)) {
       return res.status(400).json({ error: 'El rol indicado no es valido' });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
 
     const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) {
@@ -44,7 +57,7 @@ async function register(req, res, next) {
 
     const user = await prisma.user.create({
       data: {
-        fullName,
+        fullName: cleanName,
         email: normalizedEmail,
         phone: phone || null,
         passwordHash,
@@ -67,8 +80,14 @@ async function login(req, res, next) {
     if (!email || !password) {
       return res.status(400).json({ error: 'email y password son obligatorios' });
     }
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: 'email y password deben ser texto' });
+    }
+    if (email.length > 254 || password.length > 128) {
+      return res.status(400).json({ error: 'Credenciales invalidas' });
+    }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
     const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user) {
       return res.status(401).json({ error: 'Credenciales invalidas' });

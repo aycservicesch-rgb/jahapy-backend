@@ -24,7 +24,21 @@ npm run dev                   # nodemon -> http://localhost:4000
 
 El puerto se configura con `PORT` (default 4000). **No usar 5173 ni 4173** (los usa el frontend en preview).
 
+## Seguridad
+- **helmet**: headers de seguridad en todas las respuestas.
+- **Rate limiting** (`express-rate-limit`): limiter general de **100 req/min por IP** en
+  toda la API, y uno **mas estricto de 10 req/min por IP en `/api/auth/*`** (anti fuerza
+  bruta). Mensajes en espanol. Usa `trust proxy` para leer la IP real detras de Render.
+- **Body limit**: `express.json({ limit: '1mb' })`.
+- **errorHandler**: con `NODE_ENV=production` no expone stack traces ni detalles internos
+  (loguea el error completo en el server, responde mensaje generico en 500). En dev incluye
+  `stack`.
+- **Validacion** reforzada en register/login (tipos, longitudes) y en los handlers de
+  socket de rides/orders (lat/lng en rango, items con `name`/`qty`, longitudes).
+- **CORS** sigue restringido por la env `CORS_ORIGIN` (nunca `*`).
+
 ## Variables de entorno (`.env`)
+- `NODE_ENV` - `production` oculta detalles de error. Default `development`.
 - `PORT` - puerto del server (default 4000).
 - `JWT_SECRET` - secreto para firmar los JWT.
 - `JWT_EXPIRES_IN` - expiracion del token (default `7d`).
@@ -47,6 +61,42 @@ El puerto se configura con `PORT` (default 4000). **No usar 5173 ni 4173** (los 
 (`role` ∈ `PASSENGER | DRIVER | COURIER | ADMIN`, default `PASSENGER`).
 
 Errores en espanol: `400` validacion, `401` credenciales/token, `403` no autorizado, `409` duplicado.
+
+### Verificacion de conductor / comercio
+
+La aprobacion vive en la **BD** (no solo en el dispositivo) y se exige del lado servidor
+(REST + gate en el socket). Estados: `pending | approved | rejected`.
+
+| Metodo | Ruta                          | Auth  | Descripcion                                            |
+|--------|-------------------------------|-------|--------------------------------------------------------|
+| POST   | `/api/driver/apply`           | Si    | Crea/actualiza el `DriverProfile` (status `pending`). Pone el rol en `DRIVER`. Body: `{ vehicleType, plate, brand?, model?, year?, docs? }` |
+| GET    | `/api/driver/me`              | Si    | El `DriverProfile` del usuario (o `null`)              |
+| POST   | `/api/driver/pay-commission`  | Si    | Resetea `commissionDue` a 0 (pago simulado)            |
+| POST   | `/api/business/apply`         | Si    | Crea/actualiza el `BusinessProfile` (status `pending`). Body: `{ name, category?, address?, phone?, menu? }` |
+| GET    | `/api/business/me`            | Si    | El `BusinessProfile` del usuario (o `null`)            |
+
+### Admin (requiere rol `ADMIN`)
+
+| Metodo | Ruta                                      | Descripcion                                |
+|--------|-------------------------------------------|--------------------------------------------|
+| GET    | `/api/admin/drivers?status=pending`       | Lista perfiles de conductor por estado     |
+| POST   | `/api/admin/drivers/:userId/approve`      | Aprueba un conductor (devuelve el perfil)  |
+| POST   | `/api/admin/drivers/:userId/reject`       | Rechaza un conductor                        |
+| GET    | `/api/admin/businesses?status=pending`    | Lista comercios por estado                 |
+| POST   | `/api/admin/businesses/:id/approve`       | Aprueba un comercio (devuelve el perfil)   |
+| POST   | `/api/admin/businesses/:id/reject`        | Rechaza un comercio                         |
+
+> El conductor solo entra en linea (`driver:online`) y puede aceptar viajes
+> (`ride:accept`) si su `DriverProfile.status === 'approved'`. El comercio solo entra
+> en linea (`business:online`) si su `BusinessProfile.status === 'approved'` y es su dueno.
+
+### Comision del conductor (viajes en efectivo)
+
+El modelo `Ride` tiene `paymentMethod` (`cash` por defecto). Al **COMPLETAR** un viaje
+en efectivo, se acumula al conductor el **20% de la tarifa** (redondeo a centena) en
+`DriverProfile.commissionDue`. Si la comision adeudada llega a **100 000 Gs**, el
+conductor **no puede aceptar viajes** (`ride:accept` responde `ride:commission_limit`)
+hasta pagar via `POST /api/driver/pay-commission`.
 
 ## Tiempo real (Socket.IO) - viajes de transporte
 
@@ -92,6 +142,9 @@ Todos los eventos del cliente aceptan un callback de ACK opcional (3er argumento
 | `ride:no_drivers`          | PASSENGER | No habia conductores en linea |
 | `ride:cancelled`           | ambos     | El viaje fue cancelado |
 | `ride:driver_disconnected` | PASSENGER | El conductor del viaje se desconecto |
+| `driver:not_verified`      | DRIVER    | Intento `driver:online`/`ride:accept` sin estar aprobado en la BD |
+| `business:not_verified`    | BUSINESS  | Intento `business:online` sin estar aprobado o sin ser el dueno |
+| `ride:commission_limit`    | DRIVER    | Tiene comision pendiente >= 100 000 Gs; no puede aceptar viajes |
 
 > El estado de conductores en linea vive en memoria (`src/realtime/onlineDrivers.js`):
 > para el MVP no se persiste. La busqueda de cercania usa haversine (`src/lib/geo.js`).
@@ -125,11 +178,13 @@ cambia de URL.
 3. **Variables de entorno** del servicio:
    - `DATABASE_URL` = Internal Database URL del Postgres del paso 1.
    - `JWT_SECRET` = cadena larga y aleatoria.
+   - `NODE_ENV` = `production` (oculta detalles de error en las respuestas).
    - `JWT_EXPIRES_IN` = `7d` (opcional).
    - `CORS_ORIGIN` = `http://localhost:5173,http://localhost:4173,https://jocular-cat-10b938.netlify.app`
      (la URL del frontend desplegado; lista separada por comas).
    - `PORT` **no** hace falta: Render lo inyecta y el server escucha en `0.0.0.0:$PORT`.
-4. Deploy. En el build, `prisma db push` crea las tablas (User, Ride, FoodOrder) en Postgres.
+4. Deploy. En el build, `prisma db push` crea/actualiza las tablas (User, Ride, FoodOrder,
+   DriverProfile, BusinessProfile) en Postgres.
 
 No hay que tocar codigo de la app para deployar.
 

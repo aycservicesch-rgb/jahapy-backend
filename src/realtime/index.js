@@ -8,6 +8,8 @@ const onlineCouriers = require('./onlineCouriers');
 const onlineBusinesses = require('./onlineBusinesses');
 const rideService = require('../services/rideService');
 const foodOrderService = require('../services/foodOrderService');
+const driverProfileService = require('../services/driverProfileService');
+const businessProfileService = require('../services/businessProfileService');
 
 // Nombre de sala por viaje.
 const rideRoom = (rideId) => `ride:${rideId}`;
@@ -43,6 +45,21 @@ function ack(cb, data) {
   if (typeof cb === 'function') cb(data);
 }
 
+// Valida un punto { lat, lng } con coordenadas en rango geografico.
+function isLatLng(p) {
+  return (
+    p &&
+    typeof p.lat === 'number' &&
+    typeof p.lng === 'number' &&
+    Number.isFinite(p.lat) &&
+    Number.isFinite(p.lng) &&
+    p.lat >= -90 &&
+    p.lat <= 90 &&
+    p.lng >= -180 &&
+    p.lng <= 180
+  );
+}
+
 function initRealtime(httpServer) {
   const io = new Server(httpServer, {
     cors: { origin: getAllowedOrigins(), credentials: true },
@@ -70,12 +87,28 @@ function initRealtime(httpServer) {
 
     // ===================== CONDUCTOR =====================
 
-    socket.on('driver:online', (data = {}, cb) => {
+    socket.on('driver:online', async (data = {}, cb) => {
       if (role !== 'DRIVER') return ack(cb, { ok: false, error: 'Solo conductores' });
       const { lat, lng } = data;
       if (typeof lat !== 'number' || typeof lng !== 'number') {
         return ack(cb, { ok: false, error: 'lat/lng requeridos' });
       }
+
+      // Gate server-side: el conductor debe estar APROBADO en la BD.
+      try {
+        const profile = await driverProfileService.getByUserId(userId);
+        if (!profile || profile.status !== 'approved') {
+          socket.emit('driver:not_verified', {
+            status: profile ? profile.status : 'none',
+            message: 'Tu cuenta de conductor no esta aprobada todavia',
+          });
+          return ack(cb, { ok: false, error: 'Conductor no verificado' });
+        }
+      } catch (err) {
+        console.error('[socket] driver:online verify error', err.message);
+        return ack(cb, { ok: false, error: 'No se pudo verificar el conductor' });
+      }
+
       onlineDrivers.setOnline(userId, socket.id, lat, lng);
       console.log(`[socket] driver:online ${userId} (${lat},${lng})`);
       return ack(cb, { ok: true });
@@ -115,6 +148,24 @@ function initRealtime(httpServer) {
       if (!rideId) return ack(cb, { ok: false, error: 'rideId requerido' });
 
       try {
+        // Gate de comision: si debe demasiado, no puede aceptar hasta pagar.
+        const profile = await driverProfileService.getByUserId(userId);
+        if (!profile || profile.status !== 'approved') {
+          socket.emit('driver:not_verified', {
+            status: profile ? profile.status : 'none',
+            message: 'Tu cuenta de conductor no esta aprobada todavia',
+          });
+          return ack(cb, { ok: false, error: 'Conductor no verificado' });
+        }
+        if (profile.commissionDue >= driverProfileService.COMMISSION_LIMIT) {
+          socket.emit('ride:commission_limit', {
+            commissionDue: profile.commissionDue,
+            limit: driverProfileService.COMMISSION_LIMIT,
+            message: 'Tenes comision pendiente. Pagala para seguir aceptando viajes.',
+          });
+          return ack(cb, { ok: false, error: 'Comision pendiente: pagala para continuar' });
+        }
+
         const ride = await rideService.acceptRide(rideId, userId);
         if (!ride) {
           // Ya fue tomado o no existe.
@@ -167,8 +218,14 @@ function initRealtime(httpServer) {
     socket.on('ride:request', async (data = {}, cb) => {
       if (role !== 'PASSENGER') return ack(cb, { ok: false, error: 'Solo pasajeros' });
       const { origin, dest } = data;
-      if (!origin || !dest || typeof origin.lat !== 'number' || typeof dest.lat !== 'number') {
-        return ack(cb, { ok: false, error: 'origin y dest con lat/lng requeridos' });
+      if (!isLatLng(origin) || !isLatLng(dest)) {
+        return ack(cb, { ok: false, error: 'origin y dest con lat/lng validos requeridos' });
+      }
+      if (data.fare != null && (typeof data.fare !== 'number' || data.fare < 0)) {
+        return ack(cb, { ok: false, error: 'fare invalido' });
+      }
+      if (data.rideType != null && typeof data.rideType !== 'string') {
+        return ack(cb, { ok: false, error: 'rideType invalido' });
       }
 
       try {
@@ -249,8 +306,24 @@ function initRealtime(httpServer) {
     socket.on('order:place', async (data = {}, cb) => {
       if (role !== 'PASSENGER') return ack(cb, { ok: false, error: 'Solo clientes' });
       const { businessId, items, address } = data;
-      if (!businessId || !Array.isArray(items) || items.length === 0 || !address) {
-        return ack(cb, { ok: false, error: 'businessId, items y address requeridos' });
+      if (
+        typeof businessId !== 'string' ||
+        !businessId.trim() ||
+        !Array.isArray(items) ||
+        items.length === 0 ||
+        items.length > 100 ||
+        typeof address !== 'string' ||
+        !address.trim() ||
+        address.length > 500
+      ) {
+        return ack(cb, { ok: false, error: 'businessId, items y address validos requeridos' });
+      }
+      // Cada item debe tener forma minima { name, qty }.
+      const itemsOk = items.every(
+        (it) => it && typeof it.name === 'string' && Number(it.qty) > 0
+      );
+      if (!itemsOk) {
+        return ack(cb, { ok: false, error: 'Cada item necesita name y qty > 0' });
       }
 
       try {
@@ -275,9 +348,35 @@ function initRealtime(httpServer) {
 
     // ===================== COMERCIO =====================
 
-    socket.on('business:online', (data = {}, cb) => {
+    socket.on('business:online', async (data = {}, cb) => {
       const { businessId } = data;
-      if (!businessId) return ack(cb, { ok: false, error: 'businessId requerido' });
+      if (!businessId || typeof businessId !== 'string') {
+        return ack(cb, { ok: false, error: 'businessId requerido' });
+      }
+
+      // Gate server-side: el comercio debe existir, ser del usuario conectado
+      // y estar APROBADO en la BD.
+      try {
+        const profile = await businessProfileService.getById(businessId);
+        if (!profile || profile.ownerId !== userId) {
+          socket.emit('business:not_verified', {
+            status: 'none',
+            message: 'No sos el dueno de este comercio',
+          });
+          return ack(cb, { ok: false, error: 'Comercio no autorizado' });
+        }
+        if (profile.status !== 'approved') {
+          socket.emit('business:not_verified', {
+            status: profile.status,
+            message: 'Tu comercio no esta aprobado todavia',
+          });
+          return ack(cb, { ok: false, error: 'Comercio no verificado' });
+        }
+      } catch (err) {
+        console.error('[socket] business:online verify error', err.message);
+        return ack(cb, { ok: false, error: 'No se pudo verificar el comercio' });
+      }
+
       onlineBusinesses.setOnline(businessId, socket.id);
       socket.businessId = businessId;
       console.log(`[socket] business:online ${businessId} sid=${socket.id}`);

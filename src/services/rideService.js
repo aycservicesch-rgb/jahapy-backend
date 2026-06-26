@@ -1,6 +1,7 @@
 'use strict';
 
 const prisma = require('../lib/prisma');
+const driverProfileService = require('./driverProfileService');
 
 const RIDE_STATUSES = [
   'REQUESTED',
@@ -43,6 +44,7 @@ async function createRide(passengerId, data) {
       distanceKm: data.distanceKm ?? null,
       durationMin: data.durationMin ?? null,
       fare: data.fare ?? null,
+      paymentMethod: data.paymentMethod === 'card' ? 'card' : 'cash',
     },
     include: RIDE_INCLUDE,
   });
@@ -81,6 +83,21 @@ async function advanceStatus(rideId, driverId, nextStatus) {
     data,
     include: RIDE_INCLUDE,
   });
+
+  // Comision server-side: al COMPLETAR un viaje en EFECTIVO, se acumula al
+  // conductor el 20% de la tarifa (redondeo a centena). Best-effort: si falla,
+  // no rompe la finalizacion del viaje.
+  if (nextStatus === 'COMPLETED' && updated.paymentMethod === 'cash' && updated.fare) {
+    try {
+      const commission = driverProfileService.calcCommission(updated.fare);
+      if (commission > 0) {
+        await driverProfileService.addCommission(driverId, commission);
+      }
+    } catch (err) {
+      console.error('[rideService] addCommission error', err.message);
+    }
+  }
+
   return { ride: updated };
 }
 
