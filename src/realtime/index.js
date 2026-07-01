@@ -297,6 +297,25 @@ function initRealtime(httpServer) {
       }
     });
 
+    // Chat en tiempo real entre pasajero y conductor (dentro de la sala del
+    // viaje). Relay simple con timestamp REAL del servidor. Ambos ya estan en
+    // rideRoom(rideId) al aceptarse el viaje.
+    socket.on('ride:chat', (data = {}, cb) => {
+      const { rideId, text } = data;
+      if (!rideId || typeof text !== 'string' || !text.trim()) {
+        return ack(cb, { ok: false, error: 'rideId y text requeridos' });
+      }
+      const msg = {
+        rideId,
+        text: text.trim().slice(0, 500),
+        from: userId,
+        role,
+        at: new Date().toISOString(),
+      };
+      io.to(rideRoom(rideId)).emit('ride:message', msg);
+      return ack(cb, { ok: true });
+    });
+
     // ========================================================
     // ============ DELIVERY: PEDIDOS DE COMIDA ===============
     // ========================================================
