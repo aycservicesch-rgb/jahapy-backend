@@ -2,6 +2,7 @@
 
 const driverProfileService = require('../services/driverProfileService');
 const businessProfileService = require('../services/businessProfileService');
+const commissionService = require('../services/commissionService');
 
 const STATUS_FILTERS = ['pending', 'approved', 'rejected'];
 
@@ -81,6 +82,45 @@ async function rejectBusiness(req, res, next) {
   }
 }
 
+// ---------------------- COMISIONES ----------------------
+
+// GET /api/admin/commission-payments?status=pending
+async function listCommissionPayments(req, res, next) {
+  try {
+    const status = req.query.status || 'pending';
+    if (!commissionService.PAYMENT_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'status invalido' });
+    }
+    const payments = await commissionService.listPayments(status);
+    return res.json({ payments });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// POST /api/admin/commission-payments/:id/confirm
+async function confirmCommissionPayment(req, res, next) {
+  try {
+    const result = await commissionService.confirmPayment(req.params.id, req.user.sub);
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.json({ payment: result.payment });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// POST /api/admin/commission-payments/:id/reject
+async function rejectCommissionPayment(req, res, next) {
+  try {
+    const { note } = req.body || {};
+    const result = await commissionService.rejectPayment(req.params.id, req.user.sub, note);
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.json({ payment: result.payment });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   listDrivers,
   approveDriver,
@@ -88,4 +128,7 @@ module.exports = {
   listBusinesses,
   approveBusiness,
   rejectBusiness,
+  listCommissionPayments,
+  confirmCommissionPayment,
+  rejectCommissionPayment,
 };

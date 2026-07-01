@@ -2,6 +2,7 @@
 
 const prisma = require('../lib/prisma');
 const driverProfileService = require('../services/driverProfileService');
+const commissionService = require('../services/commissionService');
 
 // POST /api/driver/apply
 // Crea/actualiza el DriverProfile del usuario (status pending) con los datos
@@ -68,17 +69,38 @@ async function demoApprove(req, res, next) {
   }
 }
 
-// POST /api/driver/pay-commission  (pago simulado: resetea commissionDue a 0)
-async function payCommission(req, res, next) {
+// GET /api/driver/commission  -> { commissionDue, limit, pending: [...] }
+async function getCommission(req, res, next) {
   try {
-    const profile = await driverProfileService.payCommission(req.user.sub);
-    if (!profile) {
-      return res.status(404).json({ error: 'No tenes un perfil de conductor' });
-    }
-    return res.json({ profile });
+    const data = await commissionService.getDriverCommission(req.user.sub);
+    return res.json(data);
   } catch (err) {
     return next(err);
   }
 }
 
-module.exports = { apply, me, demoApprove, payCommission };
+// POST /api/driver/pay-commission  { amount, reference? }
+// El conductor REPORTA que transfirio su comision al alias. NO resetea su
+// propia deuda: crea un pago 'pending' que el admin confirma (o la API de ueno
+// verifica automaticamente). Devuelve { payment, autoConfirmed, commission }.
+async function reportCommission(req, res, next) {
+  try {
+    const { amount, reference, method } = req.body || {};
+    const result = await commissionService.reportPayment(req.user.sub, {
+      amount,
+      reference,
+      method,
+    });
+    if (result.error) return res.status(400).json({ error: result.error });
+    const commission = await commissionService.getDriverCommission(req.user.sub);
+    return res.status(201).json({
+      payment: result.payment,
+      autoConfirmed: result.autoConfirmed,
+      commission,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { apply, me, demoApprove, getCommission, reportCommission };

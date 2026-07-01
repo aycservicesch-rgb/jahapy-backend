@@ -10,6 +10,9 @@ const {
   listBusinesses,
   approveBusiness,
   rejectBusiness,
+  listCommissionPayments,
+  confirmCommissionPayment,
+  rejectCommissionPayment,
 } = require('../controllers/adminController');
 
 const router = Router();
@@ -26,5 +29,10 @@ router.post('/drivers/:userId/reject', rejectDriver);
 router.get('/businesses', listBusinesses);
 router.post('/businesses/:id/approve', approveBusiness);
 router.post('/businesses/:id/reject', rejectBusiness);
+
+// Pagos de comision (conductores)
+router.get('/commission-payments', listCommissionPayments);
+router.post('/commission-payments/:id/confirm', confirmCommissionPayment);
+router.post('/commission-payments/:id/reject', rejectCommissionPayment);
 
 module.exports = router;

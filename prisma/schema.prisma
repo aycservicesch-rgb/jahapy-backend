@@ -167,9 +167,33 @@ model FoodOrder {
   @@index([status])
 }
 
+// CommissionPayment: reporte de pago de comision hecho por un CONDUCTOR.
+// El conductor transfiere su comision adeudada al alias de la plataforma y
+// REPORTA el pago (queda 'pending'). Un ADMIN lo confirma (o la API de ueno lo
+// verifica automaticamente) -> se descuenta de DriverProfile.commissionDue.
+// Nunca el conductor resetea su propia deuda: eso cierra el hueco de seguridad.
+//   status: pending | confirmed | rejected
+//   method: ueno_alias | bancard | other
+model CommissionPayment {
+  id         String    @id @default(cuid())
+  driverId   String    // User.id del conductor
+  amount     Int       // guaranies reportados
+  method     String    @default("ueno_alias")
+  reference  String?   // nro de comprobante / referencia de la transferencia
+  status     String    @default("pending")
+  note       String?   // nota del admin (motivo de rechazo, etc.)
+  autoVerified Boolean @default(false) // true si lo confirmo la API de ueno
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?   // User.id del admin que confirmo/rechazo
+
+  @@index([driverId])
+  @@index([status])
+}
+
 // ---------------------------------------------------------------------------
 // PROXIMAS FASES (no implementar todavia):
 //   - Vehicle: varios vehiculos por conductor (hoy se guarda 1 en DriverProfile).
-//   - Wallet / Transaction: saldo y movimientos; pago real de comision.
+//   - Wallet / Transaction: saldo y movimientos completos.
 //   - Relacionar FoodOrder.businessId con BusinessProfile.id (hoy es String libre).
 // ---------------------------------------------------------------------------
