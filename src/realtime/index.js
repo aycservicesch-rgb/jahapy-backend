@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const { verifyToken } = require('../lib/token');
 const { getAllowedOrigins } = require('../lib/corsOrigins');
 const onlineDrivers = require('./onlineDrivers');
+const push = require('../lib/push');
 const onlineCouriers = require('./onlineCouriers');
 const onlineBusinesses = require('./onlineBusinesses');
 const rideService = require('../services/rideService');
@@ -249,6 +250,7 @@ function initRealtime(httpServer) {
         }
 
         const payload = ridePayload(ride);
+        const fareTxt = ride.fare ? ` · G ${Math.round(ride.fare).toLocaleString('es-PY')}` : '';
         targets.forEach((d) => {
           // Cada conductor entra a una sala "incoming:<rideId>" para luego
           // recibir el ride:taken si otro lo acepta.
@@ -257,6 +259,12 @@ function initRealtime(httpServer) {
             ds.join(`incoming:${ride.id}`);
             ds.emit('ride:incoming', payload);
           }
+          // Push (app cerrada): notificación al conductor. No-op si no está suscrito.
+          push.sendToUser(d.driverId, {
+            title: '¡Nuevo viaje! 🚗',
+            body: `${payload.origin?.label || 'Viaje disponible'}${fareTxt}`,
+            url: '/',
+          });
         });
 
         console.log(`[socket] ride:request ${ride.id} -> ${targets.length} conductores`);
