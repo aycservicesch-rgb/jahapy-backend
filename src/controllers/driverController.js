@@ -103,4 +103,20 @@ async function reportCommission(req, res, next) {
   }
 }
 
-module.exports = { apply, me, demoApprove, getCommission, reportCommission };
+// POST /api/driver/commission/checkout  { formaPago? }
+// Genera un link de pago (Pagopar/upay) para pagar la comision con tarjeta/QR.
+// Si Pagopar no esta configurado, responde { enabled:false } (sin error).
+async function commissionCheckout(req, res, next) {
+  try {
+    const pagopar = require('../lib/pagopar');
+    if (!pagopar.isEnabled()) return res.json({ enabled: false });
+    const { formaPago } = req.body || {};
+    const result = await commissionService.createCommissionCheckout(req.user.sub, { formaPago });
+    if (result.error) return res.status(400).json({ enabled: true, error: result.error });
+    return res.json({ enabled: true, ...result });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { apply, me, demoApprove, getCommission, reportCommission, commissionCheckout };

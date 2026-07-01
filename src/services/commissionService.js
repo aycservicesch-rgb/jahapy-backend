@@ -17,7 +17,14 @@
 
 const prisma = require('../lib/prisma');
 const uenoPay = require('../lib/uenoPay');
+const pagopar = require('../lib/pagopar');
 const { COMMISSION_LIMIT } = require('./driverProfileService');
+
+// Formatea una fecha a 'YYYY-MM-DD HH:mm:ss' (formato que espera Pagopar).
+function fmtFecha(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 
 const PAYMENT_STATUSES = ['pending', 'confirmed', 'rejected'];
 
@@ -43,6 +50,7 @@ async function getDriverCommission(driverId) {
     commissionDue: profile ? profile.commissionDue : 0,
     limit: COMMISSION_LIMIT,
     pending,
+    pagoparEnabled: pagopar.isEnabled(), // ¿hay pago con tarjeta/QR activo?
   };
 }
 
@@ -144,6 +152,88 @@ async function rejectPayment(paymentId, adminId, note) {
   return { payment: updated };
 }
 
+// ---------------- PAGO CON TARJETA / QR (Pagopar / upay) ----------------
+
+// Genera un link de checkout de Pagopar para que el conductor pague su comision
+// con tarjeta o QR. Crea un CommissionPayment 'pending' (method 'pagopar') y le
+// asocia el hash del pedido. Devuelve { checkoutUrl, paymentId, hash } o { error }.
+async function createCommissionCheckout(driverId, { formaPago } = {}) {
+  if (!pagopar.isEnabled()) return { error: 'pagopar_disabled' };
+
+  const profile = await prisma.driverProfile.findUnique({ where: { userId: driverId } });
+  const due = profile ? profile.commissionDue : 0;
+  if (due <= 0) return { error: 'No tenes comision pendiente' };
+
+  const user = await prisma.user.findUnique({
+    where: { id: driverId },
+    select: { fullName: true, email: true, phone: true },
+  });
+
+  const payment = await prisma.commissionPayment.create({
+    data: { driverId, amount: due, method: 'pagopar', status: 'pending' },
+  });
+
+  const vencimiento = new Date();
+  vencimiento.setHours(vencimiento.getHours() + 24); // 24h para pagar
+
+  const order = await pagopar.createOrder({
+    idPedido: payment.id,
+    montoTotal: due,
+    comprador: {
+      nombre: user ? user.fullName : 'Conductor Jahapy',
+      email: user ? user.email : '',
+      telefono: user ? user.phone : '',
+      documento: '',
+    },
+    items: [{
+      ciudad: 1, nombre: 'Comision Jahapy', cantidad: 1, categoria: '909',
+      public_key: process.env.PAGOPAR_PUBLIC_KEY || '', url_imagen: '',
+      descripcion: 'Comision de viajes', precio_total: due,
+    }],
+    formaPago,
+    fechaMaximaPago: fmtFecha(vencimiento),
+  });
+
+  if (!order.ok) {
+    await prisma.commissionPayment.update({
+      where: { id: payment.id },
+      data: { status: 'rejected', note: 'No se pudo generar el link de pago' },
+    });
+    return { error: 'No se pudo generar el link de pago', detail: order.error };
+  }
+
+  await prisma.commissionPayment.update({
+    where: { id: payment.id },
+    data: { reference: order.hash },
+  });
+
+  return { checkoutUrl: order.checkoutUrl, paymentId: payment.id, hash: order.hash };
+}
+
+// Confirma un pago Pagopar tras validar el webhook. Doble-verifica el estado
+// real contra Pagopar (pagado === true) antes de descontar la deuda.
+// Idempotente: si ya estaba confirmado, no hace nada.
+async function confirmPagoparPayment(idPedidoComercio, hashPedido) {
+  const payment = await prisma.commissionPayment.findUnique({ where: { id: idPedidoComercio } });
+  if (!payment) return { error: 'Pago no encontrado' };
+  if (payment.status === 'confirmed') return { payment }; // idempotente
+
+  const st = await pagopar.getOrderStatus(hashPedido || payment.reference);
+  if (!st.ok || !st.pagado) return { error: 'Pago no confirmado por Pagopar' };
+
+  await decreaseDue(payment.driverId, payment.amount);
+  const updated = await prisma.commissionPayment.update({
+    where: { id: payment.id },
+    data: {
+      status: 'confirmed',
+      autoVerified: true,
+      reviewedAt: new Date(),
+      note: 'Pagado con tarjeta/QR (Pagopar)',
+    },
+  });
+  return { payment: updated };
+}
+
 module.exports = {
   PAYMENT_STATUSES,
   getDriverCommission,
@@ -151,4 +241,6 @@ module.exports = {
   listPayments,
   confirmPayment,
   rejectPayment,
+  createCommissionCheckout,
+  confirmPagoparPayment,
 };

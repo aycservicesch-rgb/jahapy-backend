@@ -12,6 +12,7 @@ const driverRoutes = require('./routes/driver');
 const businessRoutes = require('./routes/business');
 const adminRoutes = require('./routes/admin');
 const pushRoutes = require('./routes/push');
+const paymentRoutes = require('./routes/payments');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { generalLimiter, authLimiter } = require('./middleware/rateLimit');
 const { getAllowedOrigins } = require('./lib/corsOrigins');
@@ -47,6 +48,7 @@ app.use('/api/driver', driverRoutes);
 app.use('/api/business', businessRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api', userRoutes);
 
 // 404 + manejo de errores
