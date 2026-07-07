@@ -43,6 +43,22 @@ model User {
 
   // Viajes programados (reservas)
   scheduledRides  ScheduledRide[] @relation("PassengerScheduled")
+
+  // Notas del CRM (escritas por el admin sobre este usuario)
+  notes           UserNote[] @relation("UserNotes")
+}
+
+// UserNote: nota del CRM que el admin escribe sobre un cliente/usuario.
+model UserNote {
+  id        String   @id @default(cuid())
+  userId    String   // usuario sobre el que es la nota
+  authorId  String   // admin que la escribió
+  text      String
+  createdAt DateTime @default(now())
+
+  user User @relation("UserNotes", fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 // DriverProfile: datos del vehiculo + estado de verificacion del conductor.

@@ -14,6 +14,10 @@ const {
   listCommissionPayments,
   confirmCommissionPayment,
   rejectCommissionPayment,
+  stats,
+  listUsers,
+  userDetail,
+  addUserNote,
 } = require('../controllers/adminController');
 
 const router = Router();
@@ -36,5 +40,11 @@ router.post('/businesses/:id/reject', rejectBusiness);
 router.get('/commission-payments', listCommissionPayments);
 router.post('/commission-payments/:id/confirm', confirmCommissionPayment);
 router.post('/commission-payments/:id/reject', rejectCommissionPayment);
+
+// CRM: métricas + gestión de usuarios/clientes
+router.get('/stats', stats);
+router.get('/users', listUsers);
+router.get('/users/:id', userDetail);
+router.post('/users/:id/notes', addUserNote);
 
 module.exports = router;

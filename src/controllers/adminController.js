@@ -4,6 +4,7 @@ const driverProfileService = require('../services/driverProfileService');
 const businessProfileService = require('../services/businessProfileService');
 const commissionService = require('../services/commissionService');
 const driverDocumentService = require('../services/driverDocumentService');
+const crmService = require('../services/crmService');
 
 const STATUS_FILTERS = ['pending', 'approved', 'rejected'];
 
@@ -132,6 +133,52 @@ async function rejectCommissionPayment(req, res, next) {
   }
 }
 
+// ---------------------- CRM ----------------------
+
+// GET /api/admin/stats
+async function stats(req, res, next) {
+  try {
+    return res.json(await crmService.getStats());
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// GET /api/admin/users?search=&role=
+async function listUsers(req, res, next) {
+  try {
+    const users = await crmService.listUsers({
+      search: req.query.search || '',
+      role: req.query.role || '',
+    });
+    return res.json({ users });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// GET /api/admin/users/:id
+async function userDetail(req, res, next) {
+  try {
+    const data = await crmService.getUserDetail(req.params.id);
+    if (!data) return res.status(404).json({ error: 'Usuario no encontrado' });
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// POST /api/admin/users/:id/notes  { text }
+async function addUserNote(req, res, next) {
+  try {
+    const result = await crmService.addNote(req.params.id, req.user.sub, req.body?.text);
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.status(201).json({ note: result.note });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   listDrivers,
   approveDriver,
@@ -143,4 +190,8 @@ module.exports = {
   listCommissionPayments,
   confirmCommissionPayment,
   rejectCommissionPayment,
+  stats,
+  listUsers,
+  userDetail,
+  addUserNote,
 };
