@@ -3,6 +3,7 @@
 const driverProfileService = require('../services/driverProfileService');
 const businessProfileService = require('../services/businessProfileService');
 const commissionService = require('../services/commissionService');
+const driverDocumentService = require('../services/driverDocumentService');
 
 const STATUS_FILTERS = ['pending', 'approved', 'rejected'];
 
@@ -28,6 +29,16 @@ async function approveDriver(req, res, next) {
     const result = await driverProfileService.setStatus(req.params.userId, 'approved');
     if (result.error) return res.status(404).json({ error: result.error });
     return res.json({ profile: result.profile });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// GET /api/admin/drivers/:userId/documents  -> imágenes reales del conductor
+async function driverDocuments(req, res, next) {
+  try {
+    const docs = await driverDocumentService.getDocuments(req.params.userId);
+    return res.json({ documents: docs });
   } catch (err) {
     return next(err);
   }
@@ -125,6 +136,7 @@ module.exports = {
   listDrivers,
   approveDriver,
   rejectDriver,
+  driverDocuments,
   listBusinesses,
   approveBusiness,
   rejectBusiness,

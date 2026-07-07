@@ -7,6 +7,7 @@ const {
   listDrivers,
   approveDriver,
   rejectDriver,
+  driverDocuments,
   listBusinesses,
   approveBusiness,
   rejectBusiness,
@@ -22,6 +23,7 @@ router.use(requireAuth, requireAdmin);
 
 // Conductores
 router.get('/drivers', listDrivers);
+router.get('/drivers/:userId/documents', driverDocuments);
 router.post('/drivers/:userId/approve', approveDriver);
 router.post('/drivers/:userId/reject', rejectDriver);
 

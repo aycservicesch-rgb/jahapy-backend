@@ -3,6 +3,7 @@
 const prisma = require('../lib/prisma');
 const driverProfileService = require('../services/driverProfileService');
 const commissionService = require('../services/commissionService');
+const driverDocumentService = require('../services/driverDocumentService');
 
 // POST /api/driver/apply
 // Crea/actualiza el DriverProfile del usuario (status pending) con los datos
@@ -119,4 +120,20 @@ async function commissionCheckout(req, res, next) {
   }
 }
 
-module.exports = { apply, me, demoApprove, getCommission, reportCommission, commissionCheckout };
+// POST /api/driver/documents  { kind, dataUrl }
+// Sube (o reemplaza) UNA imagen de documento del conductor logueado. Se envía
+// de a una para mantener el request chico.
+async function uploadDocument(req, res, next) {
+  try {
+    const { kind, dataUrl } = req.body || {};
+    const result = await driverDocumentService.saveDocument(req.user.sub, kind, dataUrl);
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.status(201).json({ ok: true, doc: result.doc });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = {
+  apply, me, demoApprove, getCommission, reportCommission, commissionCheckout, uploadDocument,
+};

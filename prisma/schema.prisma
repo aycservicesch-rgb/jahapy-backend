@@ -191,6 +191,23 @@ model CommissionPayment {
   @@index([status])
 }
 
+// DriverDocument: imagen REAL de un documento del conductor (CI, licencia,
+// selfie, cedula verde, fotos del vehiculo, etc.). Se guarda la imagen
+// comprimida como data URL (base64) en la BD. Una fila por (driverId, kind).
+//   kind: ci | licencia | selfie | antecedentes | cedulaVerde | rtv |
+//         frente | atras | lateral | interior
+model DriverDocument {
+  id        String   @id @default(cuid())
+  driverId  String   // User.id del conductor
+  kind      String
+  dataUrl   String   // imagen comprimida (data:image/jpeg;base64,...)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([driverId, kind])
+  @@index([driverId])
+}
+
 // ---------------------------------------------------------------------------
 // PROXIMAS FASES (no implementar todavia):
 //   - Vehicle: varios vehiculos por conductor (hoy se guarda 1 en DriverProfile).
