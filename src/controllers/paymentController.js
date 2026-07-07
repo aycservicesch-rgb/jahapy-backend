@@ -32,8 +32,9 @@ async function pagoparWebhook(req, res) {
       await commissionService.confirmPagoparPayment(idPedido, hashPedido);
     }
 
-    // Pagopar espera un 200; devolvemos el token como acuse (patron habitual).
-    return res.json({ respuesta: true, resultado: token });
+    // Pagopar espera un 200 y (recomendado por la doc) que devolvamos el mismo
+    // contenido de `resultado` que nos envió, como acuse.
+    return res.status(200).json(Array.isArray(body.resultado) ? body.resultado : [payload]);
   } catch (err) {
     console.error('[payments] pagoparWebhook error', err.message);
     // 200 para que Pagopar no reintente en loop ante un error interno nuestro.
