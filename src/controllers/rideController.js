@@ -1,6 +1,7 @@
 'use strict';
 
 const rideService = require('../services/rideService');
+const scheduledRideService = require('../services/scheduledRideService');
 
 // GET /api/rides/mine
 async function listMine(req, res, next) {
@@ -38,4 +39,38 @@ async function getOne(req, res, next) {
   }
 }
 
-module.exports = { listMine, active, getOne };
+// ---------------- RESERVAS PROGRAMADAS ----------------
+
+// POST /api/rides/scheduled  { origin, dest, scheduledFor, rideType?, fare?, ... }
+async function scheduleRide(req, res, next) {
+  try {
+    const result = await scheduledRideService.create(req.user.sub, req.body || {});
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.status(201).json({ scheduled: result.ride });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// GET /api/rides/scheduled  -> reservas futuras del pasajero
+async function listScheduled(req, res, next) {
+  try {
+    const scheduled = await scheduledRideService.listUpcoming(req.user.sub);
+    return res.json({ scheduled });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// POST /api/rides/scheduled/:id/cancel
+async function cancelScheduled(req, res, next) {
+  try {
+    const result = await scheduledRideService.cancel(req.params.id, req.user.sub);
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.json({ scheduled: result.ride });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { listMine, active, getOne, scheduleRide, listScheduled, cancelScheduled };

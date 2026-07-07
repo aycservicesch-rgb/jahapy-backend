@@ -40,6 +40,9 @@ model User {
   // Perfiles de verificacion (conductor / comercio)
   driverProfile   DriverProfile?
   businessProfiles BusinessProfile[] @relation("BusinessOwner")
+
+  // Viajes programados (reservas)
+  scheduledRides  ScheduledRide[] @relation("PassengerScheduled")
 }
 
 // DriverProfile: datos del vehiculo + estado de verificacion del conductor.
@@ -189,6 +192,38 @@ model CommissionPayment {
 
   @@index([driverId])
   @@index([status])
+}
+
+// ScheduledRide: una RESERVA de viaje para un momento futuro. Un scheduler en
+// el server despacha las que llegan a su hora (crea un Ride y avisa a los
+// conductores cercanos + push al pasajero).
+//   status: scheduled | dispatched | cancelled
+model ScheduledRide {
+  id           String   @id @default(cuid())
+  passengerId  String
+  rideType     String   @default("standard")
+
+  originLat    Float
+  originLng    Float
+  originLabel  String?
+  destLat      Float
+  destLng      Float
+  destLabel    String?
+
+  distanceKm   Float?
+  durationMin  Float?
+  fare         Int?
+
+  scheduledFor DateTime
+  status       String   @default("scheduled")
+  rideId       String?  // Ride creado al despachar
+  createdAt    DateTime @default(now())
+  dispatchedAt DateTime?
+
+  passenger User @relation("PassengerScheduled", fields: [passengerId], references: [id])
+
+  @@index([passengerId])
+  @@index([status, scheduledFor])
 }
 
 // DriverDocument: imagen REAL de un documento del conductor (CI, licencia,

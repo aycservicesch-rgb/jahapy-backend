@@ -46,6 +46,61 @@ function ack(cb, data) {
   if (typeof cb === 'function') cb(data);
 }
 
+// Instancia de Socket.IO (se setea en initRealtime). La usa el scheduler de
+// reservas para despachar viajes programados sin un socket de pasajero.
+let ioInstance = null;
+
+// Despacha un ride a los conductores en línea cercanos: los mete en la sala
+// "incoming:<rideId>", les emite ride:incoming y les manda push (app cerrada).
+// Devuelve la cantidad de conductores avisados. Compartido por ride:request
+// (tiempo real) y el scheduler de reservas programadas.
+function dispatchToDrivers(io, ride) {
+  let targets = onlineDrivers.findNearby(
+    { lat: ride.originLat, lng: ride.originLng },
+    NEARBY_RADIUS_KM
+  );
+  if (targets.length === 0) targets = onlineDrivers.all();
+  if (targets.length === 0) return 0;
+
+  const payload = ridePayload(ride);
+  const fareTxt = ride.fare ? ` · G ${Math.round(ride.fare).toLocaleString('es-PY')}` : '';
+  targets.forEach((d) => {
+    const ds = io.sockets.sockets.get(d.socketId);
+    if (ds) {
+      ds.join(`incoming:${ride.id}`);
+      ds.emit('ride:incoming', payload);
+    }
+    push.sendToUser(d.driverId, {
+      title: '¡Nuevo viaje! 🚗',
+      body: `${payload.origin?.label || 'Viaje disponible'}${fareTxt}`,
+      url: '/',
+    });
+  });
+  return targets.length;
+}
+
+// Despacha una reserva programada: crea el Ride, avisa a los conductores y
+// manda push al pasajero (que puede tener la app cerrada). Devuelve el ride.
+async function dispatchScheduledRide(scheduled) {
+  if (!ioInstance) return null;
+  const ride = await rideService.createRide(scheduled.passengerId, {
+    rideType: scheduled.rideType,
+    origin: { lat: scheduled.originLat, lng: scheduled.originLng, label: scheduled.originLabel },
+    dest: { lat: scheduled.destLat, lng: scheduled.destLng, label: scheduled.destLabel },
+    distanceKm: scheduled.distanceKm,
+    durationMin: scheduled.durationMin,
+    fare: scheduled.fare,
+  });
+  const drivers = dispatchToDrivers(ioInstance, ride);
+  // Avisar al pasajero (app cerrada) que su reserva está saliendo.
+  push.sendToUser(scheduled.passengerId, {
+    title: 'Tu viaje reservado está saliendo 🚗',
+    body: `${scheduled.destLabel ? 'Hacia ' + scheduled.destLabel + '. ' : ''}Abrí Jahapy para seguir a tu conductor.`,
+    url: '/',
+  });
+  return { ride, drivers };
+}
+
 // Valida un punto { lat, lng } con coordenadas en rango geografico.
 function isLatLng(p) {
   return (
@@ -65,6 +120,7 @@ function initRealtime(httpServer) {
   const io = new Server(httpServer, {
     cors: { origin: getAllowedOrigins(), credentials: true },
   });
+  ioInstance = io; // disponible para el scheduler de reservas
 
   // --- Autenticacion del handshake ---
   io.use((socket, next) => {
@@ -235,40 +291,12 @@ function initRealtime(httpServer) {
         // El pasajero entra a la sala del viaje para recibir actualizaciones.
         socket.join(rideRoom(ride.id));
 
-        // Buscar conductores en linea cercanos; si no hay cercanos, a todos.
-        let targets = onlineDrivers.findNearby(
-          { lat: ride.originLat, lng: ride.originLng },
-          NEARBY_RADIUS_KM
-        );
-        if (targets.length === 0) {
-          targets = onlineDrivers.all();
-        }
+        // Despachar a conductores cercanos (lógica compartida con el scheduler).
+        const drivers = dispatchToDrivers(io, ride);
+        if (drivers === 0) socket.emit('ride:no_drivers', { rideId: ride.id });
 
-        if (targets.length === 0) {
-          socket.emit('ride:no_drivers', { rideId: ride.id });
-          return ack(cb, { ok: true, rideId: ride.id, drivers: 0 });
-        }
-
-        const payload = ridePayload(ride);
-        const fareTxt = ride.fare ? ` · G ${Math.round(ride.fare).toLocaleString('es-PY')}` : '';
-        targets.forEach((d) => {
-          // Cada conductor entra a una sala "incoming:<rideId>" para luego
-          // recibir el ride:taken si otro lo acepta.
-          const ds = io.sockets.sockets.get(d.socketId);
-          if (ds) {
-            ds.join(`incoming:${ride.id}`);
-            ds.emit('ride:incoming', payload);
-          }
-          // Push (app cerrada): notificación al conductor. No-op si no está suscrito.
-          push.sendToUser(d.driverId, {
-            title: '¡Nuevo viaje! 🚗',
-            body: `${payload.origin?.label || 'Viaje disponible'}${fareTxt}`,
-            url: '/',
-          });
-        });
-
-        console.log(`[socket] ride:request ${ride.id} -> ${targets.length} conductores`);
-        return ack(cb, { ok: true, rideId: ride.id, drivers: targets.length });
+        console.log(`[socket] ride:request ${ride.id} -> ${drivers} conductores`);
+        return ack(cb, { ok: true, rideId: ride.id, drivers });
       } catch (err) {
         console.error('[socket] ride:request error', err.message);
         return ack(cb, { ok: false, error: 'Error al solicitar el viaje' });
@@ -651,4 +679,4 @@ function initRealtime(httpServer) {
   return io;
 }
 
-module.exports = { initRealtime };
+module.exports = { initRealtime, dispatchScheduledRide };
