@@ -42,4 +42,17 @@ async function pagoparWebhook(req, res) {
   }
 }
 
-module.exports = { pagoparWebhook };
+// GET /api/payments/pagopar/status/:hash  (PUBLICO)
+// Consulta el estado real de un pedido contra Pagopar (Paso #4 de la doc).
+// El hash es imposible de adivinar, así que no expone datos sensibles.
+async function pagoparStatus(req, res) {
+  try {
+    const st = await pagopar.getOrderStatus(req.params.hash);
+    return res.json(st);
+  } catch (err) {
+    console.error('[payments] pagoparStatus error', err.message);
+    return res.status(200).json({ ok: false, error: 'No se pudo consultar el estado' });
+  }
+}
+
+module.exports = { pagoparWebhook, pagoparStatus };
