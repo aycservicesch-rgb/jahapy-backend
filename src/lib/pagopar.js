@@ -91,14 +91,33 @@ async function createOrder({ idPedido, montoTotal, comprador = {}, items, formaP
   const monto = String(Math.round(Number(montoTotal) || 0));
   if (monto === '0') return { ok: false, error: 'monto_invalido' };
 
+  // Normaliza cada item con TODOS los campos que exige Pagopar (incluidos los
+  // vendedor_* e id_producto), rellenando los que falten con valores válidos.
+  const rawItems = Array.isArray(items) && items.length
+    ? items
+    : [{ nombre: 'Servicio Jahapy', descripcion: 'Servicio Jahapy', precio_total: Number(monto) }];
+  const compras_items = rawItems.map((it, i) => ({
+    ciudad: it.ciudad || 1,
+    nombre: it.nombre || 'Servicio Jahapy',
+    cantidad: it.cantidad || 1,
+    categoria: it.categoria || '909',
+    public_key: it.public_key || PUBLIC_KEY,
+    url_imagen: it.url_imagen || '',
+    descripcion: it.descripcion || it.nombre || 'Servicio Jahapy',
+    id_producto: it.id_producto != null ? it.id_producto : i + 1,
+    precio_total: Number(it.precio_total != null ? it.precio_total : monto),
+    vendedor_telefono: it.vendedor_telefono || '',
+    vendedor_direccion: it.vendedor_direccion || '',
+    vendedor_direccion_referencia: it.vendedor_direccion_referencia || '',
+    vendedor_direccion_coordenadas: it.vendedor_direccion_coordenadas || '',
+  }));
+
   const body = {
     token: tokenCrearPedido(idPedido, monto),
     public_key: PUBLIC_KEY,
     monto_total: monto,
     tipo_pedido: 'VENTA-COMERCIO',
-    compras_items: Array.isArray(items) && items.length ? items : [
-      { ciudad: 1, nombre: 'Comisión Jahapy', cantidad: 1, categoria: '909', public_key: PUBLIC_KEY, url_imagen: '', descripcion: 'Comisión', precio_total: Number(monto) },
-    ],
+    compras_items,
     comprador: {
       ruc: comprador.documento || '',
       email: comprador.email || '',
