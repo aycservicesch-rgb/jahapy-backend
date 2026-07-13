@@ -48,6 +48,19 @@ model User {
   notes           UserNote[] @relation("UserNotes")
 }
 
+// PasswordReset: token para recuperar contraseña por email. Se guarda el HASH
+// del token (no el token en claro), con vencimiento y un solo uso.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
 // UserNote: nota del CRM que el admin escribe sobre un cliente/usuario.
 model UserNote {
   id        String   @id @default(cuid())

@@ -4,6 +4,10 @@ const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
 const { signToken } = require('../lib/token');
 const sanitizeUser = require('../lib/sanitizeUser');
+const mailer = require('../lib/mailer');
+const passwordResetService = require('../services/passwordResetService');
+
+const APP_URL = (process.env.APP_URL || 'https://jahapy.net.py').replace(/\/$/, '');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_ROLES = ['PASSENGER', 'DRIVER', 'COURIER', 'ADMIN'];
@@ -105,4 +109,40 @@ async function login(req, res, next) {
   }
 }
 
-module.exports = { register, login };
+// POST /api/auth/forgot-password  { email }
+// Genera un token y envía el email con el enlace de reset. Responde genérico
+// (no revela si el email está registrado) por seguridad.
+async function forgotPassword(req, res, next) {
+  try {
+    const { email } = req.body || {};
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Ingresá tu email' });
+    }
+    const result = await passwordResetService.createResetToken(email);
+    if (result) {
+      const link = `${APP_URL}/?reset=${result.rawToken}`;
+      await mailer.sendPasswordReset(result.user.email, link);
+    }
+    // sent indica si el mailer está configurado (para el mensaje del front).
+    return res.json({ ok: true, sent: mailer.isEnabled() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// POST /api/auth/reset-password  { token, password }
+async function resetPassword(req, res, next) {
+  try {
+    const { token, password } = req.body || {};
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Falta el token o la nueva contraseña' });
+    }
+    const result = await passwordResetService.resetPassword(token, password);
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.json({ ok: true });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { register, login, forgotPassword, resetPassword };
