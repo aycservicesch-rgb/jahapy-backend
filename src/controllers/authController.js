@@ -121,7 +121,10 @@ async function forgotPassword(req, res, next) {
     const result = await passwordResetService.createResetToken(email);
     if (result) {
       const link = `${APP_URL}/?reset=${result.rawToken}`;
-      await mailer.sendPasswordReset(result.user.email, link);
+      // Enviar en segundo plano: NO bloquear la respuesta esperando al SMTP
+      // (si Gmail tarda, el front no debe cortar con "no pudimos conectar").
+      mailer.sendPasswordReset(result.user.email, link)
+        .catch((e) => console.error('[forgot] mail error:', e?.message));
     }
     // sent indica si el mailer está configurado (para el mensaje del front).
     return res.json({ ok: true, sent: mailer.isEnabled() });
