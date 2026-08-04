@@ -8,9 +8,9 @@ const PROFILE_STATUSES = ['pending', 'approved', 'rejected'];
 // aceptar viajes hasta pagar.
 const COMMISSION_LIMIT = 100000;
 
-// Comision: 20% de la tarifa, redondeado a la centena mas cercana.
+// Comision: 10% de la tarifa (tarifa de lanzamiento), redondeado a la centena.
 function calcCommission(fare) {
-  const raw = Number(fare) * 0.2;
+  const raw = Number(fare) * 0.1;
   if (!Number.isFinite(raw) || raw <= 0) return 0;
   return Math.round(raw / 100) * 100;
 }
