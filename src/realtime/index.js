@@ -519,12 +519,19 @@ function initRealtime(httpServer) {
         // Al pasar a READY, avisar a los repartidores en linea.
         if (payload.status === 'READY') {
           const couriers = onlineCouriers.all();
+          const feeTxt = payload.deliveryFee ? ` · G ${Math.round(payload.deliveryFee).toLocaleString('es-PY')}` : '';
           couriers.forEach((c) => {
             const cs = io.sockets.sockets.get(c.socketId);
             if (cs) {
               cs.join(`delivery_incoming:${orderId}`);
               cs.emit('delivery:available', payload);
             }
+            // Push: llega aunque el repartidor tenga la app en segundo plano.
+            push.sendToUser(c.courierId, {
+              title: '¡Nuevo pedido! 🛵',
+              body: `Entrega disponible${feeTxt}`,
+              url: '/',
+            });
           });
           console.log(
             `[socket] order:status ${orderId} -> READY (avisados ${couriers.length} repartidores)`
