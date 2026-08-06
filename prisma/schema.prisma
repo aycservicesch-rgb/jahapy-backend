@@ -26,6 +26,19 @@ model User {
   role         String   @default("PASSENGER")
   city         String?
   rating       Float?   @default(5.0)
+
+  // Seguridad: penalización por reportes (asalto/abuso). Si suspended=true, no
+  // puede pedir viajes (pasajero) ni ponerse en línea (conductor).
+  suspended       Boolean  @default(false)
+  suspendedReason String?
+  safetyStrikes   Int      @default(0)
+
+  // Identidad del pasajero. Los extranjeros no tienen cédula PY → pasaporte.
+  isForeigner  Boolean  @default(false)
+  nationality  String?
+  docType      String?  // 'ci' | 'passport'
+  docNumber    String?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -59,6 +72,26 @@ model PasswordReset {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+// SafetyReport: reporte de seguridad de un viaje. El conductor reporta al
+// pasajero (intento de asalto, amenaza) o el pasajero al conductor (abuso,
+// manejo peligroso). Al confirmarlo el admin, el reportado suma un strike y,
+// pasado el umbral, queda suspendido.
+model SafetyReport {
+  id           String    @id @default(cuid())
+  reporterId   String    // quién reporta
+  reportedId   String    // a quién reporta
+  rideId       String?   // viaje relacionado (opcional)
+  reporterRole String    // 'driver' | 'passenger'
+  reason       String    // robbery_attempt|assault|threat|harassment|unsafe_driving|abuse|other
+  notes        String?
+  status       String    @default("open") // open | confirmed | dismissed
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  @@index([reportedId])
+  @@index([status])
 }
 
 // UserNote: nota del CRM que el admin escribe sobre un cliente/usuario.

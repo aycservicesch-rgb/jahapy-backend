@@ -5,6 +5,7 @@ const businessProfileService = require('../services/businessProfileService');
 const commissionService = require('../services/commissionService');
 const driverDocumentService = require('../services/driverDocumentService');
 const crmService = require('../services/crmService');
+const safetyService = require('../services/safetyService');
 
 const STATUS_FILTERS = ['pending', 'approved', 'rejected'];
 
@@ -179,6 +180,35 @@ async function addUserNote(req, res, next) {
   }
 }
 
+// ===================== SEGURIDAD =====================
+
+// GET /api/admin/safety-reports?status=open
+async function listSafetyReports(req, res, next) {
+  try {
+    const status = req.query.status ? String(req.query.status) : 'open';
+    const reports = await safetyService.listReports(status);
+    return res.json({ reports });
+  } catch (err) { return next(err); }
+}
+
+// POST /api/admin/safety-reports/:id/resolve  { action: 'confirm' | 'dismiss' }
+async function resolveSafetyReport(req, res, next) {
+  try {
+    const { action } = req.body || {};
+    const result = await safetyService.resolveReport(req.params.id, action);
+    if (result.error) return res.status(400).json({ error: result.error });
+    return res.json(result);
+  } catch (err) { return next(err); }
+}
+
+// POST /api/admin/users/:userId/unsuspend  (segunda oportunidad)
+async function unsuspendUser(req, res, next) {
+  try {
+    const result = await safetyService.unsuspend(req.params.userId);
+    return res.json(result);
+  } catch (err) { return next(err); }
+}
+
 module.exports = {
   listDrivers,
   approveDriver,
@@ -194,4 +224,7 @@ module.exports = {
   listUsers,
   userDetail,
   addUserNote,
+  listSafetyReports,
+  resolveSafetyReport,
+  unsuspendUser,
 };

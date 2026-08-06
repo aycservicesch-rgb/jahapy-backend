@@ -18,6 +18,9 @@ const {
   listUsers,
   userDetail,
   addUserNote,
+  listSafetyReports,
+  resolveSafetyReport,
+  unsuspendUser,
 } = require('../controllers/adminController');
 
 const router = Router();
@@ -46,5 +49,10 @@ router.get('/stats', stats);
 router.get('/users', listUsers);
 router.get('/users/:id', userDetail);
 router.post('/users/:id/notes', addUserNote);
+
+// Seguridad: reportes de asalto/abuso + suspensiones
+router.get('/safety-reports', listSafetyReports);
+router.post('/safety-reports/:id/resolve', resolveSafetyReport);
+router.post('/users/:userId/unsuspend', unsuspendUser);
 
 module.exports = router;

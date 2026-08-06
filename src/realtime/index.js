@@ -11,6 +11,7 @@ const rideService = require('../services/rideService');
 const foodOrderService = require('../services/foodOrderService');
 const driverProfileService = require('../services/driverProfileService');
 const businessProfileService = require('../services/businessProfileService');
+const safetyService = require('../services/safetyService');
 
 // Nombre de sala por viaje.
 const rideRoom = (rideId) => `ride:${rideId}`;
@@ -151,6 +152,18 @@ function initRealtime(httpServer) {
         return ack(cb, { ok: false, error: 'lat/lng requeridos' });
       }
 
+      // Gate de seguridad: conductor suspendido por reportes no puede conectarse.
+      try {
+        if (await safetyService.isSuspended(userId)) {
+          socket.emit('account:suspended', {
+            message: 'Tu cuenta está suspendida por reportes de seguridad. Contactá al soporte.',
+          });
+          return ack(cb, { ok: false, error: 'Cuenta suspendida' });
+        }
+      } catch (err) {
+        console.error('[socket] driver:online suspend check error', err.message);
+      }
+
       // Gate server-side: el conductor debe estar APROBADO en la BD.
       try {
         const profile = await driverProfileService.getByUserId(userId);
@@ -283,6 +296,18 @@ function initRealtime(httpServer) {
       }
       if (data.rideType != null && typeof data.rideType !== 'string') {
         return ack(cb, { ok: false, error: 'rideType invalido' });
+      }
+
+      // Gate de seguridad: pasajero suspendido por reportes no puede pedir viajes.
+      try {
+        if (await safetyService.isSuspended(userId)) {
+          socket.emit('account:suspended', {
+            message: 'Tu cuenta está suspendida por reportes de seguridad. Contactá al soporte.',
+          });
+          return ack(cb, { ok: false, error: 'Cuenta suspendida' });
+        }
+      } catch (err) {
+        console.error('[socket] ride:request suspend check error', err.message);
       }
 
       try {

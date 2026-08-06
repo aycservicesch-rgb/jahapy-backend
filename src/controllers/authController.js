@@ -15,7 +15,7 @@ const VALID_ROLES = ['PASSENGER', 'DRIVER', 'COURIER', 'ADMIN'];
 // POST /api/auth/register
 async function register(req, res, next) {
   try {
-    const { fullName, email, password, phone, role, city } = req.body || {};
+    const { fullName, email, password, phone, role, city, isForeigner, nationality, docType, docNumber } = req.body || {};
 
     if (!fullName || !email || !password) {
       return res.status(400).json({ error: 'fullName, email y password son obligatorios' });
@@ -59,6 +59,12 @@ async function register(req, res, next) {
 
     const passwordHash = await bcrypt.hash(String(password), 10);
 
+    // Identidad: extranjero (pasaporte) o local (cédula). Solo se guarda si viene.
+    const foreigner = isForeigner === true;
+    const dType = docType === 'passport' ? 'passport' : (docType === 'ci' ? 'ci' : (foreigner ? 'passport' : null));
+    const dNum = typeof docNumber === 'string' ? docNumber.trim().slice(0, 40) || null : null;
+    const nat = typeof nationality === 'string' ? nationality.trim().slice(0, 60) || null : null;
+
     const user = await prisma.user.create({
       data: {
         fullName: cleanName,
@@ -67,6 +73,10 @@ async function register(req, res, next) {
         passwordHash,
         role: role || 'PASSENGER',
         city: city || null,
+        isForeigner: foreigner,
+        nationality: nat,
+        docType: dType,
+        docNumber: dNum,
       },
     });
 
