@@ -91,6 +91,7 @@ model DriverProfile {
   plate         String?
   docs          String?  // JSON: { license, id, insurance, ... }
   commissionDue Int      @default(0)
+  freeUntil     DateTime? // promo lanzamiento: 0% comision hasta esta fecha
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

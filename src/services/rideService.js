@@ -89,7 +89,9 @@ async function advanceStatus(rideId, driverId, nextStatus) {
   // no rompe la finalizacion del viaje.
   if (nextStatus === 'COMPLETED' && updated.paymentMethod === 'cash' && updated.fare) {
     try {
-      const commission = driverProfileService.calcCommission(updated.fare);
+      // Respeta la promo de lanzamiento: 0% durante el mes gratis del conductor.
+      const profile = await driverProfileService.getByUserId(driverId);
+      const commission = driverProfileService.commissionForDriver(profile, updated.fare);
       if (commission > 0) {
         await driverProfileService.addCommission(driverId, commission);
       }

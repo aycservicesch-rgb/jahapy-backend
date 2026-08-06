@@ -8,11 +8,32 @@ const PROFILE_STATUSES = ['pending', 'approved', 'rejected'];
 // aceptar viajes hasta pagar.
 const COMMISSION_LIMIT = 100000;
 
+// PROMO DE LANZAMIENTO: cada conductor tiene sus primeros 30 dias (desde que se
+// aprueba su perfil) con 0% de comision. Pasado ese plazo, vuelve al 10%.
+const FREE_PERIOD_DAYS = 30;
+
+// ¿El conductor esta dentro de su mes gratis? (freeUntil futuro)
+function isInFreePeriod(profile) {
+  if (!profile || !profile.freeUntil) return false;
+  return new Date(profile.freeUntil).getTime() > Date.now();
+}
+
 // Comision: 10% de la tarifa (tarifa de lanzamiento), redondeado a la centena.
 function calcCommission(fare) {
   const raw = Number(fare) * 0.1;
   if (!Number.isFinite(raw) || raw <= 0) return 0;
   return Math.round(raw / 100) * 100;
+}
+
+// Comision a cobrar a ESTE conductor por una tarifa: 0 si esta en su mes gratis.
+function commissionForDriver(profile, fare) {
+  if (isInFreePeriod(profile)) return 0;
+  return calcCommission(fare);
+}
+
+// Fecha de fin del mes gratis a partir de ahora.
+function freeUntilFromNow() {
+  return new Date(Date.now() + FREE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
 }
 
 // Crea o actualiza el DriverProfile del usuario con los datos del vehiculo.
@@ -44,10 +65,10 @@ async function getByUserId(userId) {
 async function demoApprove(userId) {
   const profile = await prisma.driverProfile.findUnique({ where: { userId } });
   if (!profile) return null;
-  return prisma.driverProfile.update({
-    where: { userId },
-    data: { status: 'approved' },
-  });
+  // Al aprobar por primera vez, arranca su mes gratis (0% comision).
+  const data = { status: 'approved' };
+  if (!profile.freeUntil) data.freeUntil = freeUntilFromNow();
+  return prisma.driverProfile.update({ where: { userId }, data });
 }
 
 async function payCommission(userId) {
@@ -83,9 +104,12 @@ async function setStatus(userId, status) {
   if (!PROFILE_STATUSES.includes(status)) return { error: 'Estado invalido' };
   const profile = await prisma.driverProfile.findUnique({ where: { userId } });
   if (!profile) return { error: 'Perfil de conductor no encontrado' };
+  const data = { status };
+  // Al aprobar por primera vez, arranca su mes gratis (0% comision).
+  if (status === 'approved' && !profile.freeUntil) data.freeUntil = freeUntilFromNow();
   const updated = await prisma.driverProfile.update({
     where: { userId },
-    data: { status },
+    data,
     include: { user: { select: { id: true, fullName: true, email: true, phone: true, city: true } } },
   });
   return { profile: updated };
@@ -94,7 +118,10 @@ async function setStatus(userId, status) {
 module.exports = {
   PROFILE_STATUSES,
   COMMISSION_LIMIT,
+  FREE_PERIOD_DAYS,
   calcCommission,
+  commissionForDriver,
+  isInFreePeriod,
   applyDriver,
   getByUserId,
   demoApprove,

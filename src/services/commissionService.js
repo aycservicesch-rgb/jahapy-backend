@@ -18,7 +18,8 @@
 const prisma = require('../lib/prisma');
 const uenoPay = require('../lib/uenoPay');
 const pagopar = require('../lib/pagopar');
-const { COMMISSION_LIMIT } = require('./driverProfileService');
+const driverProfileService = require('./driverProfileService');
+const { COMMISSION_LIMIT } = driverProfileService;
 
 // Formatea una fecha a 'YYYY-MM-DD HH:mm:ss' (formato que espera Pagopar).
 function fmtFecha(d) {
@@ -51,6 +52,9 @@ async function getDriverCommission(driverId) {
     limit: COMMISSION_LIMIT,
     pending,
     pagoparEnabled: pagopar.isEnabled(), // ¿hay pago con tarjeta/QR activo?
+    // PROMO: mes gratis (0% comision) del conductor.
+    freeUntil: profile ? profile.freeUntil : null,
+    inFreePeriod: driverProfileService.isInFreePeriod(profile),
   };
 }
 
