@@ -41,4 +41,27 @@ async function getDocuments(driverId) {
   return docs;
 }
 
-module.exports = { DOC_KINDS, saveDocument, getDocuments };
+// VERIFICACION DE IDENTIDAD: la selfie de control caduca cada X horas. Si no
+// hay selfie o esta vencida, el conductor debe sacarse una nueva ANTES de
+// ponerse en linea. Esto elimina las cuentas alquiladas: siempre maneja quien
+// se verifico. (Comparacion contra la foto de cedula: la hace el admin; el
+// match automatico por biometria es una mejora futura con un servicio externo.)
+const SELFIE_TTL_HOURS = 12;
+
+async function getSelfieStatus(driverId) {
+  const selfie = await prisma.driverDocument.findUnique({
+    where: { driverId_kind: { driverId, kind: 'selfie' } },
+    select: { updatedAt: true },
+  });
+  const ttlMs = SELFIE_TTL_HOURS * 60 * 60 * 1000;
+  const takenAt = selfie ? selfie.updatedAt : null;
+  const fresh = takenAt ? (Date.now() - new Date(takenAt).getTime() < ttlMs) : false;
+  return {
+    hasSelfie: !!selfie,
+    takenAt,
+    needsSelfie: !fresh,
+    ttlHours: SELFIE_TTL_HOURS,
+  };
+}
+
+module.exports = { DOC_KINDS, SELFIE_TTL_HOURS, saveDocument, getDocuments, getSelfieStatus };

@@ -134,6 +134,18 @@ async function uploadDocument(req, res, next) {
   }
 }
 
+// GET /api/driver/selfie-status → { hasSelfie, takenAt, needsSelfie, ttlHours }
+// El frontend lo usa como gate: si needsSelfie, pide una selfie en vivo antes
+// de permitir ponerse "En linea".
+async function selfieStatus(req, res, next) {
+  try {
+    const data = await driverDocumentService.getSelfieStatus(req.user.sub);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
-  apply, me, demoApprove, getCommission, reportCommission, commissionCheckout, uploadDocument,
+  apply, me, demoApprove, getCommission, reportCommission, commissionCheckout, uploadDocument, selfieStatus,
 };

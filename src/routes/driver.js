@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth');
-const { apply, me, demoApprove, getCommission, reportCommission, commissionCheckout, uploadDocument } = require('../controllers/driverController');
+const { apply, me, demoApprove, getCommission, reportCommission, commissionCheckout, uploadDocument, selfieStatus } = require('../controllers/driverController');
 
 const router = Router();
 
@@ -15,6 +15,8 @@ router.get('/commission', requireAuth, getCommission);
 router.post('/pay-commission', requireAuth, reportCommission);
 // Subida real de documentos (imagen comprimida, de a una).
 router.post('/documents', requireAuth, uploadDocument);
+// Verificacion de identidad: ¿necesita sacarse una selfie de control?
+router.get('/selfie-status', requireAuth, selfieStatus);
 // Pago de comision con tarjeta/QR (Pagopar/upay): genera link de checkout.
 router.post('/commission/checkout', requireAuth, commissionCheckout);
 
