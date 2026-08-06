@@ -1,6 +1,7 @@
 'use strict';
 
 const prisma = require('../lib/prisma');
+const courierCommissionService = require('./courierCommissionService');
 
 const ORDER_STATUSES = [
   'PLACED',
@@ -150,6 +151,17 @@ async function advanceByCourier(orderId, courierId, nextStatus) {
     data: dataUpd,
     include: ORDER_INCLUDE,
   });
+
+  // Comisión del repartidor: 10% del envío al ENTREGAR (respeta el mes gratis).
+  // Best-effort: si falla, no rompe la entrega.
+  if (nextStatus === 'DELIVERED' && updated.deliveryFee) {
+    try {
+      await courierCommissionService.chargeOnDelivery(courierId, updated.deliveryFee);
+    } catch (err) {
+      console.error('[foodOrderService] courier commission error', err.message);
+    }
+  }
+
   return { order: updated };
 }
 

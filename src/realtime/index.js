@@ -12,6 +12,7 @@ const foodOrderService = require('../services/foodOrderService');
 const driverProfileService = require('../services/driverProfileService');
 const businessProfileService = require('../services/businessProfileService');
 const safetyService = require('../services/safetyService');
+const courierCommissionService = require('../services/courierCommissionService');
 
 // Nombre de sala por viaje.
 const rideRoom = (rideId) => `ride:${rideId}`;
@@ -541,12 +542,24 @@ function initRealtime(httpServer) {
 
     // ===================== REPARTIDOR =====================
 
-    socket.on('courier:online', (data = {}, cb) => {
+    socket.on('courier:online', async (data = {}, cb) => {
       if (role !== 'COURIER') return ack(cb, { ok: false, error: 'Solo repartidores' });
       const { lat, lng } = data;
       if (typeof lat !== 'number' || typeof lng !== 'number') {
         return ack(cb, { ok: false, error: 'lat/lng requeridos' });
       }
+      // Gate de seguridad: repartidor suspendido no puede conectarse.
+      try {
+        if (await safetyService.isSuspended(userId)) {
+          socket.emit('account:suspended', {
+            message: 'Tu cuenta está suspendida por reportes de seguridad. Contactá al soporte.',
+          });
+          return ack(cb, { ok: false, error: 'Cuenta suspendida' });
+        }
+      } catch (err) { console.error('[socket] courier suspend check', err.message); }
+      // Arranca su mes gratis (0% comisión) la primera vez que se conecta.
+      try { await courierCommissionService.startFreePeriod(userId); } catch (err) { console.error('[socket] courier free period', err.message); }
+
       onlineCouriers.setOnline(userId, socket.id, lat, lng);
       console.log(`[socket] courier:online ${userId} (${lat},${lng})`);
       return ack(cb, { ok: true });

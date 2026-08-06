@@ -33,6 +33,10 @@ model User {
   suspendedReason String?
   safetyStrikes   Int      @default(0)
 
+  // Comisión de REPARTIDOR (delivery): 10% del envío, con primer mes gratis.
+  courierCommissionDue Int       @default(0)
+  courierFreeUntil     DateTime?
+
   // Identidad del pasajero. Los extranjeros no tienen cédula PY → pasaporte.
   isForeigner  Boolean  @default(false)
   nationality  String?
